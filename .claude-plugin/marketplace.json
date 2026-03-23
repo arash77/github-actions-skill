@@ -1,0 +1,27 @@
+{
+  "name": "github-actions-skill",
+  "owner": {
+    "name": "arash77",
+    "url": "https://github.com/arash77"
+  },
+  "metadata": {
+    "description": "Hardened GitHub Actions CI/CD workflow skill for Claude Code",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "github-actions-hardened",
+      "source": "./",
+      "description": "Generate production-hardened GitHub Actions workflows with least-privilege permissions, concurrency groups, timeout guards, dependency caching, and pinned action tags. Always co-generates .github/dependabot.yml.",
+      "version": "1.0.0",
+      "author": {
+        "name": "arash77"
+      },
+      "homepage": "https://github.com/arash77/github-actions-skill",
+      "repository": "https://github.com/arash77/github-actions-skill",
+      "license": "MIT",
+      "keywords": ["github-actions", "ci-cd", "security", "hardened", "devops"],
+      "category": "devops"
+    }
+  ]
+}

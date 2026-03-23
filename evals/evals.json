@@ -1,0 +1,48 @@
+{
+  "skill_name": "github-actions-hardened",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a GitHub Actions CI workflow for a TypeScript monorepo using pnpm. It should run tests and lint on PRs.",
+      "expected_output": "A .github/workflows/ci.yml with major-version-pinned actions (`@v4`, not `@latest`/`@main`), job-level permissions (contents: read), a concurrency group, timeout-minutes on the job, pnpm caching, and a .github/dependabot.yml",
+      "files": [],
+      "assertions": [
+        "All uses: lines pin to a major version tag (@v4, @v5, etc.) — not @latest, @main, or @master",
+        "Job has explicit permissions block with contents: read (not write-all, not omitted)",
+        "Workflow has a concurrency: block with a group: key",
+        "Job has timeout-minutes: explicitly set",
+        "pnpm caching is configured (cache: pnpm on setup-node or via pnpm/action-setup)",
+        "A dependabot.yml file is generated with package-ecosystem: github-actions"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Set up a hardened GitHub Actions pipeline that builds a Docker image on main push and pushes to GHCR. I need this to pass a security audit.",
+      "expected_output": "A .github/workflows/docker.yml with major-version-pinned Docker actions (login, metadata, build-push), minimal permissions (contents: read, packages: write), concurrency with cancel-in-progress: false on main, timeout-minutes: 30, GHA layer cache, and a .github/dependabot.yml",
+      "files": [],
+      "assertions": [
+        "All third-party actions (docker/login-action, docker/metadata-action, docker/build-push-action) are pinned to major version tags (not @latest or @main)",
+        "Job permissions are minimal: contents: read and packages: write only (no write-all)",
+        "Concurrency block protects main branch from cancellation (cancel-in-progress: false or equivalent condition)",
+        "Job has timeout-minutes: explicitly set",
+        "Docker layer caching uses cache-from: type=gha and cache-to: type=gha",
+        "A dependabot.yml file is generated with package-ecosystem: github-actions"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Generate a hardened Go CI workflow. I'm not sure what the latest major versions are for the actions.",
+      "expected_output": "A .github/workflows/ci.yml with major version tags (verified or with a note to verify), job-level permissions, concurrency group, timeout-minutes, Go module caching, and a .github/dependabot.yml",
+      "files": [],
+      "assertions": [
+        "Uses known major version tags or includes a note to verify versions",
+        "Mentions `gh api` or web lookup as a way to verify action versions",
+        "Job has explicit permissions block",
+        "Workflow has a concurrency: block",
+        "Job has timeout-minutes: explicitly set",
+        "Go module caching is configured (cache: true on setup-go or actions/cache for ~/.cache/go-build)",
+        "A dependabot.yml file is generated with package-ecosystem: github-actions"
+      ]
+    }
+  ]
+}

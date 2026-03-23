@@ -1,0 +1,13 @@
+{
+  "name": "github-actions-hardened",
+  "version": "1.0.0",
+  "description": "Generate production-hardened GitHub Actions CI/CD workflows enforcing least-privilege permissions, concurrency groups, timeout guards, dependency caching, and latest major version action tags. Always co-generates a .github/dependabot.yml.",
+  "author": {
+    "name": "arash77",
+    "url": "https://github.com/arash77"
+  },
+  "homepage": "https://github.com/arash77/github-actions-skill",
+  "repository": "https://github.com/arash77/github-actions-skill",
+  "license": "MIT",
+  "keywords": ["github-actions", "ci-cd", "security", "hardened", "devops"]
+}
