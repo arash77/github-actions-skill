@@ -43,6 +43,50 @@
         "Go module caching is configured (cache: true on setup-go or actions/cache for ~/.cache/go-build)",
         "A dependabot.yml file is generated with package-ecosystem: github-actions"
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "Create a GitHub Actions deployment workflow that deploys to staging on every push to main, then requires a manual approval before deploying to production. We use AWS.",
+      "expected_output": "A .github/workflows/deploy.yml using GitHub Environments ('staging' and 'production'), OIDC-based AWS authentication (id-token: write permission), cancel-in-progress: false on the concurrency group, timeout-minutes on both jobs, job-level permissions, and a .github/dependabot.yml",
+      "files": [],
+      "assertions": [
+        "Workflow uses GitHub Environments: both 'staging' and 'production' environment: keys are present",
+        "OIDC auth is used: id-token: write permission and aws-actions/configure-aws-credentials action (not static AWS_SECRET_ACCESS_KEY)",
+        "concurrency.cancel-in-progress is false (deployments must never be cancelled)",
+        "Both jobs have timeout-minutes explicitly set",
+        "Both jobs have explicit permissions blocks with id-token: write and contents: read",
+        "deploy-production job has needs: deploy-staging (staging must succeed first)",
+        "A dependabot.yml file is generated with package-ecosystem: github-actions"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I need a workflow triggered by pull_request_target that runs our test suite and posts a comment with the result.",
+      "expected_output": "A warning about the pull_request_target security risk, explaining that checking out and running PR code with this trigger gives fork contributors code execution with write-scoped GITHUB_TOKEN. A safe alternative pattern: either a read-only labeler/commenter that doesn't run PR code, or the two-workflow artifact-passing pattern using workflow_run.",
+      "files": [],
+      "assertions": [
+        "Skill warns about the pull_request_target security risk (running fork PR code with repo secrets/write token)",
+        "Skill does not generate a workflow that combines pull_request_target + checkout of github.event.pull_request.head.sha + a run: step that executes PR code",
+        "Skill explains or proposes the two-workflow pattern (pull_request uploads artifacts, workflow_run downloads and acts on them) OR a safe alternative that avoids running PR code",
+        "Any generated workflow has explicit job-level permissions",
+        "Any generated workflow has timeout-minutes set"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Set up a CI workflow for a Python project using pip. Run tests with pytest on Python 3.11 and 3.12.",
+      "expected_output": "A .github/workflows/ci.yml using actions/setup-python@v5 with cache: 'pip', matrix strategy for Python 3.11 and 3.12, pytest as the test command, job-level permissions, concurrency group, timeout-minutes, and a .github/dependabot.yml",
+      "files": [],
+      "assertions": [
+        "Uses actions/setup-python pinned to a major version tag (e.g. @v5)",
+        "Python dependency caching is configured (cache: 'pip' on setup-python)",
+        "Matrix strategy covers both Python 3.11 and 3.12",
+        "Test command uses pytest",
+        "Job has explicit permissions block with contents: read",
+        "Workflow has a concurrency: block",
+        "Job has timeout-minutes: explicitly set",
+        "A dependabot.yml file is generated with package-ecosystem: github-actions"
+      ]
     }
   ]
 }

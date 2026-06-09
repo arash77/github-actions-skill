@@ -83,6 +83,7 @@ Skills are namespaced when installed via the plugin marketplace:
 - **Pattern A — CI Test Workflow** (Node.js, Python, Go, Rust, Java/Maven, Java/Gradle)
 - **Pattern B — Docker Build and Push to GHCR**
 - **Pattern C — Tagged Release**
+- **Pattern D — Staged Deployment with GitHub Environments** (staging → manual approval → production, OIDC auth)
 
 ### Always Included Alongside Every Workflow
 
@@ -136,10 +137,13 @@ github-actions-skill/
 
 ## Evals
 
-The `evals/evals.json` file contains three test cases covering:
+The `evals/evals.json` file contains six test cases covering:
 - TypeScript monorepo with pnpm
 - Docker build + GHCR push (security audit scenario)
 - Go CI without internet access (version verification handling)
+- AWS deployment with GitHub Environments and manual approval gate
+- `pull_request_target` security warning and safe alternative patterns
+- Python CI with pytest and pip caching
 
 ## License
 

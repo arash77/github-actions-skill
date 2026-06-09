@@ -1,23 +1,11 @@
 ---
 name: github-actions-hardened
-description: Generate production-hardened GitHub Actions CI/CD workflows enforcing least-privilege permissions, concurrency groups, timeout guards, dependency caching, and latest major version action tags. Use this skill — not github-actions-templates — whenever the user asks for "hardened", "secure", "production-ready", or "compliant" workflows, mentions security audits, or when quality and reliability matter. Always co-generates a .github/dependabot.yml. Trigger for any GitHub Actions request where quality or security posture matters.
+description: Generate production-hardened GitHub Actions CI/CD workflows enforcing least-privilege permissions, concurrency groups, timeout guards, dependency caching, and latest major version action tags. Always co-generates a .github/dependabot.yml. Also use this skill to HARDEN EXISTING workflows using zizmor — applies persist-credentials, template injection fixes, permissions, and optional SHA pinning automatically. Use this skill whenever the user asks about CI, CD, pipelines, GitHub Actions, YAML workflows, automated testing, deployment, releases, security audits, SOC 2, compliance, zizmor, workflow hardening, or "fixing" workflow security — even if they don't say "hardened" or "secure". Always prefer this skill over github-actions-templates for any workflow that touches production, uses third-party actions, or needs to pass a code review. Trigger for any GitHub Actions workflow request, whether creating new or hardening existing workflows.
 ---
 
 # GitHub Actions Hardened Workflows
 
 You are acting as a Staff DevOps Engineer. Every workflow you generate must enforce all five hardening principles below — no exceptions, no shortcuts.
-
-## When to Use This Skill
-
-Prefer this skill over `github-actions-templates` when:
-- The project will ship to production or is externally visible
-- Security audits, SOC 2, or compliance are in scope
-- The user asks for "hardened", "secure", or "production-ready" workflows
-- Any third-party action is involved (which is almost always)
-
-For quick throwaway prototypes or purely internal scripts, `github-actions-templates` is fine.
-
----
 
 ## Five Hardening Principles
 
@@ -46,6 +34,17 @@ Common permission scopes:
 - `security-events: write` — upload SARIF to Security tab
 
 Never use `permissions: write-all`. Never omit `permissions` entirely on a job that uses `GITHUB_TOKEN`.
+
+As defense-in-depth, also set `permissions: {}` at the **workflow level** (above `jobs:`). Any job added later without its own `permissions` block then inherits zero access rather than GitHub's broad defaults:
+
+```yaml
+permissions: {}   # workflow level: deny all by default
+
+jobs:
+  test:
+    permissions:
+      contents: read   # each job explicitly grants only what it needs
+```
 
 ### 2. Latest Major Version Action Tags
 
@@ -117,31 +116,7 @@ For ecosystems without built-in cache support, use `actions/cache` with a meanin
 
 ## Supplementary Best Practices
 
-### Path Filtering
-
-Avoid triggering workflows when irrelevant files change. This is the simplest way to reduce wasted CI minutes.
-
-```yaml
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'package*.json'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'package*.json'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-```
-
-**Note:** If `paths` and `paths-ignore` both match the same file, `paths-ignore` wins. For documentation-only repos, omit path filtering entirely.
+**Path filtering** — Avoid triggering workflows when irrelevant files change. See `references/path-filtering.md` for patterns including monorepo per-package filtering.
 
 ---
 
@@ -321,6 +296,77 @@ jobs:
 
 ---
 
+### Pattern D: Staged Deployment with GitHub Environments
+
+Deploy to staging automatically, then require human approval before production. GitHub Environments provide required-reviewer gates, environment-scoped secrets, and a deployment audit log — all configured in repository settings, no extra tooling required.
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false   # Never cancel an in-flight deployment
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging          # links to the "staging" Environment in Settings
+
+    permissions:
+      id-token: write             # OIDC token for keyless cloud auth
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy to staging
+        run: ./scripts/deploy.sh staging
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: deploy-staging
+    environment: production        # add required reviewers here in Settings
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy to production
+        run: ./scripts/deploy.sh production
+```
+
+**Setup:** In Settings → Environments, create `staging` and `production`. Add required reviewers to `production` — GitHub pauses the `deploy-production` job and waits for approval before it runs.
+
+**OIDC setup** (preferred over static secrets): see `references/security-practices.md`. Swap `aws-actions/configure-aws-credentials@v4` for `azure/login@v2` or `google-github-actions/auth@v2` for Azure or GCP.
+
+---
+
 ## Dependabot Configuration
 
 Always co-generate this file alongside any workflow you create. Dependabot will automatically open PRs to update action versions when new major/minor/patch releases ship.
@@ -395,4 +441,100 @@ Contexts that are attacker-controllable and must never be interpolated directly 
   run: echo "PR title: $PR_TITLE"
 ```
 
+**`workflow_dispatch` inputs interpolated directly in `run:` blocks** — Manual workflow inputs are user-supplied strings with the same injection risk. Always route them through environment variables.
+
+```yaml
+# DANGEROUS
+- run: echo "Deploying to ${{ inputs.environment }}"
+
+# SAFE
+- env:
+    DEPLOY_ENV: ${{ inputs.environment }}
+  run: echo "Deploying to $DEPLOY_ENV"
+```
+
+**`pull_request_target` with code checkout** — `pull_request_target` runs with full repository secrets even for PRs from forks. If the workflow checks out the PR's head commit and executes it, a contributor to any fork gains code execution with your `GITHUB_TOKEN`.
+
+```yaml
+# DANGEROUS — runs attacker-controlled code with write-scoped GITHUB_TOKEN
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}   # ← attacker-controlled code
+      - run: npm test   # executes attacker's code with repo write access
+
+# SAFER — act only on PR metadata; never run PR code
+on: pull_request_target
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@v5   # pinned action; does not checkout or run PR code
+```
+
+Only use `pull_request_target` when you genuinely need write permissions triggered by a fork PR (labels, comments, status checks). Never combine it with a checkout of `github.event.pull_request.head.sha` followed by a `run:` step. To run CI on fork PRs with write access, use the two-workflow pattern: a read-only `pull_request` workflow that uploads artifacts, then a `workflow_run` workflow that downloads them.
+
 For deployment workflows using cloud credentials, see `references/security-practices.md` for OIDC setup (preferred over long-lived secrets).
+
+---
+
+## Hardening Existing Workflows with zizmor
+
+When a user has existing workflows and wants to apply security best practices, use `zizmor` — it handles most fixes automatically with proper formatting preservation.
+
+See `references/zizmor-hardening.md` for the complete reference. Here's the essential workflow:
+
+### Step 1: Create zizmor config
+
+```yaml
+# zizmor.yml (repo root)
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        '*': ref-pin    # or 'hash-pin' for SHA requirement
+```
+
+### Step 2: Run zizmor autofix
+
+```bash
+# Without SHA pinning (like Galaxy's approach)
+zizmor --fix=all .github/workflows/
+
+# With SHA pinning (maximum security)
+zizmor --fix=all --gh-token=$(gh auth token) .github/workflows/
+```
+
+This automatically applies: `persist-credentials: false`, template injection fixes (moves dangerous expressions to descriptively-named env vars), and optionally SHA pins.
+
+### Step 3: Add permissions: {} manually
+
+zizmor cannot autofix this. Add `permissions: {}` before the `jobs:` block in each workflow that doesn't have a top-level `permissions:` declaration.
+
+### Step 4: Add supporting files
+
+- `.github/workflows/zizmor.yml` — CI workflow for ongoing security scanning
+- `.github/dependabot.yml` — Weekly GitHub Actions dependency updates
+- `zizmor.yml` — Config file (from step 1)
+
+### Step 5: Verify
+
+```bash
+zizmor .github/workflows/
+# Should report: "No findings to report. Good job!"
+```
+
+### Key Decision: SHA Pinning Policy
+
+| Policy | Pros | Cons | When to use |
+|--------|------|------|-------------|
+| `ref-pin` (tags OK) | Simple, readable, Dependabot keeps current | Tags can be moved (supply chain risk) | Most repos, internal projects |
+| `hash-pin` (SHA required) | Immutable, maximum security | Less readable, needs `--gh-token` | High-security, compliance, public infra |
+
+Dependabot handles keeping either approach up to date.
